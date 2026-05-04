@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - lab_8/new_branch_000003
+
+jobs:
+  build-test-push:
+    name: Build, Test and Push Docker image
+    runs-on: ubuntu-latest
+
+    permissions:
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r Lab_8/app_000003/requirements.txt
+
+      - name: Start application and wait for readiness
+        run: |
+          python Lab_8/app_000003/app.py &
+          for i in {1..30}; do
+            if curl -fsS http://localhost:5000/health > /dev/null 2>&1; then
+              echo "Aplikacja gotowa po $i sekundach"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "Aplikacja nie uruchomila sie w ciagu 30 sekund"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Run tests
+        run: python -m pytest Lab_8/app_000003/test_app.py -v
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: Lab_8/app_000003
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/lab8-app-000003:latest
