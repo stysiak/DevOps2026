@@ -231,11 +231,12 @@ touch .github/workflows/lab_8_nrIndeksu.yml
 1. Checkout kodu repozytorium
 2. Konfiguracja Python 3.11
 3. Instalacja zależności: `pip install -r Lab_8/app_nrIndeksu/requirements.txt`
-4. Uruchomienie testów: `python -m pytest Lab_8/app_nrIndeksu/test_app.py -v`
-5. Logowanie do rejestru kontenerów (Docker Hub lub ghcr.io)
-6. Budowanie i wysyłanie obrazu Docker
+4. Uruchomienie aplikacji w tle i oczekiwanie na gotowość (`python app.py &` + pętla health-check na `/health`)
+5. Uruchomienie testów: `python -m pytest Lab_8/app_nrIndeksu/test_app.py -v`
+6. Logowanie do rejestru kontenerów (Docker Hub lub ghcr.io)
+7. Budowanie i wysyłanie obrazu Docker
 
-**Uwaga:** Kroki 5 i 6 wykonają się tylko jeśli testy (krok 4) przeszły — domyślne sekwencyjne zachowanie GitHub Actions zapewnia to automatycznie.
+**Uwaga:** Testy (krok 5) używają biblioteki `requests` i łączą się z serwerem na `localhost:5000` — aplikacja musi być uruchomiona przed pytest. Kroki 6 i 7 wykonają się tylko jeśli testy przeszły — domyślne sekwencyjne zachowanie GitHub Actions zapewnia to automatycznie.
 
 - 7.3 Przydatne akcje GitHub:
 
