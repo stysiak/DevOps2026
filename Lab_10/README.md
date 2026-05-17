@@ -104,59 +104,20 @@ cat ~/.ssh/id_lab10.pub   # skopiuj te wartosc — bedzie potrzebna w nastepnym 
 
 **Sprawdz:** `terraform version` zwraca wersje >= 1.5 oraz `az version` zwraca zainstalowana wersje CLI.
 
-### 2 Konfiguracja Azure i sekretow GitHub
+### 2 Logowanie do Azure
 
-- 2.1 Zaloguj sie do Azure i pobierz Subscription ID:
+- 2.1 Zaloguj sie do Azure:
 
 ```bash
 az login
-az account show --query id -o tsv   # skopiuj ten identyfikator
+az account show --query id -o tsv   # zapamietaj Subscription ID
 ```
 
-- 2.2 Stworz Service Principal z uprawnieniami do Twojej subskrypcji:
+**Sprawdz:** `az account show` zwraca Twoja subskrypcje.
 
-```bash
-az ad sp create-for-rbac \
-  --name "sp-devops-lab10-nrIndeksu" \
-  --role Contributor \
-  --scopes /subscriptions/<SUBSCRIPTION_ID> \
-  --output json
-```
+### 3 Konfiguracja workflow
 
-Zapisz caly wynik JSON — bedziez go potrzebowal:
-```json
-{
-  "appId":    "xxxxxxxx-...",   <-- to jest ARM_CLIENT_ID
-  "password": "xxxxxxxx-...",   <-- to jest ARM_CLIENT_SECRET
-  "tenant":   "xxxxxxxx-..."    <-- to jest ARM_TENANT_ID
-}
-```
-
-- 2.3 W swoim forku na GitHub przejdz do **Settings → Secrets and variables → Actions** i dodaj 5 sekretow (przycisk **New repository secret**):
-
-| Nazwa sekretu | Wartosc |
-|---|---|
-| `ARM_CLIENT_ID` | appId z poprzedniego kroku |
-| `ARM_CLIENT_SECRET` | password z poprzedniego kroku |
-| `ARM_TENANT_ID` | tenant z poprzedniego kroku |
-| `ARM_SUBSCRIPTION_ID` | Twoje Subscription ID (krok 2.1) |
-| `TF_VAR_SSH_PUBLIC_KEY` | zawartosc pliku `~/.ssh/id_lab10.pub` |
-
-- 2.4 W tej samej zakladce przejdz na **Variables** i dodaj zmienna:
-
-| Nazwa zmiennej | Wartosc |
-|---|---|
-| `TF_VAR_PREFIX` | `devopsnrIndeksu` — tylko male litery i cyfry, max 12 znakow (np. `devops123456`) |
-
-**Sprawdz:** W zakladce **Settings → Secrets and variables → Actions** widac 5 sekretow i 1 zmienna.
-
-### 3 Konfiguracja GitHub Actions environment
-
-- 3.1 Przejdz do **Settings → Environments → New environment** i stworz environment o nazwie `production` (dokladnie ta nazwa, mala litera).
-
-- 3.2 Wlacz **Required reviewers** i dodaj swoje konto GitHub jako wymaganego recenzenta. Dzieki temu job `terraform-apply` bedzie czekac na Twoje reczne zatwierdzenie po obejrzeniu planu.
-
-- 3.3 Skopiuj szablon workflow do katalogu `.github/workflows/`:
+- 3.1 Skopiuj szablon workflow do katalogu `.github/workflows/`:
 
 ```bash
 cp Lab_10/terraform.yml .github/workflows/lab10_nrIndeksu.yml
@@ -240,52 +201,56 @@ cp Lab_10/terraform/terraform.tfvars.example Lab_10/terraform/terraform.tfvars
 
 Edytuj `Lab_10/terraform/terraform.tfvars`:
 ```hcl
-prefix         = "devopsnrIndeksu"   # ten sam co TF_VAR_PREFIX
+prefix         = "devopsnrIndeksu"   # tylko male litery i cyfry, max 12 znakow
 location       = "polandcentral"
 admin_username = "azureuser"
 ssh_public_key = "ssh-ed25519 AAAA..."  # zawartosc ~/.ssh/id_lab10.pub
 ```
 
-- 8.2 Zweryfikuj konfiguracje lokalnie:
+- 8.2 Zainicjalizuj i zwaliduj konfiguracje:
 
 ```bash
 cd Lab_10/terraform
 terraform init
 terraform validate
-terraform plan -var-file=terraform.tfvars
 ```
 
-**Sprawdz:** `terraform plan` konczy sie komunikatem `Plan: N to add, 0 to change, 0 to destroy.` bez zadnych bledow.
+**Sprawdz:** `terraform validate` zwraca `The configuration is valid.`
 
-- 8.3 Dodaj plik `.terraform.lock.hcl` do repozytorium (zapewnia te sama wersje providera w pipeline):
-
-```bash
-cd Lab_10/terraform
-git add .terraform.lock.hcl
-```
-
-- 8.4 Wypchnij wszystkie zmiany:
+- 8.3 Wypchnij zmiany (CI uruchomi validate):
 
 ```bash
 cd <katalog-glowny-repo>
 git add Lab_10/terraform/ .github/workflows/lab10_nrIndeksu.yml
+git add Lab_10/terraform/.terraform.lock.hcl
 git commit -m "lab10: terraform infrastructure + pipeline"
 git push
 ```
 
-**Sprawdz:** Push zakonczony sukcesem. W zakladce **Actions** pojawil sie nowy run.
+**Sprawdz:** Job `terraform-validate` w zakladce **Actions** jest zielony.
 
-### 9 Uruchomienie pipeline — plan i approve
+### 9 Uruchomienie infrastruktury lokalnie
 
-- 9.1 Przejdz do zakladki **Actions** w swoim forku na GitHub. Kliknij w ostatni run `Terraform Lab 10`.
+Poniewaz plan i apply wymagaja polaczenia z Azure, uruchamiaj je lokalnie po `az login`.
 
-- 9.2 Poczekaj az job `terraform-plan` zakonczy sie (ok. 2-3 minuty). Kliknij w niego i rozwrn krok **Terraform Plan** — przeczytaj caly output. Powinny byc widoczne zasoby do stworzenia: VM, VNet, NSG, Storage Account, ACR, Private Endpoint, Private DNS Zone, role assignments.
+- 9.1 Uruchom plan aby zobaczyc co zostanie stworzone:
 
-- 9.3 Job `terraform-apply` czeka na zatwierdzenie. Jesli plan jest poprawny, kliknij **Review deployments → Approve and deploy**.
+```bash
+cd Lab_10/terraform
+terraform plan -var-file=terraform.tfvars
+```
 
-- 9.4 Poczekaj az `terraform-apply` zakonczy sie (5-10 minut — tworzenie VM i private endpoint zajmuje chwile).
+Przeczytaj output — powinny byc widoczne zasoby: VM, VNet, NSG, Storage Account, ACR, Private Endpoint, Private DNS Zone, role assignments.
 
-**Sprawdz:** Oba joby (`terraform-plan` i `terraform-apply`) maja zielony status w zakladce **Actions**.
+- 9.2 Jesli plan wyglada poprawnie, zastosuj infrastrukture:
+
+```bash
+terraform apply -var-file=terraform.tfvars
+```
+
+Wpisz `yes` gdy Terraform zapyta o potwierdzenie. Operacja zajmuje 5-10 minut.
+
+**Sprawdz:** `terraform apply` konczy sie komunikatem `Apply complete!` bez bledow.
 
 ### 10 Weryfikacja infrastruktury
 
@@ -432,6 +397,6 @@ Wynik powinien byc pusty lub zakonczyc sie bledem `ResourceGroupNotFound` — ob
 
 ### Zaliczenie laboratoriow
 
-- Workflow `Terraform Lab 10` w forku studenta — oba joby (`terraform-plan`, `terraform-apply`) sa zielone
+- Job `terraform-validate` w forku studenta — zielony w zakladce **Actions**
 - Obraz `lab10-app:v1` widoczny w ACR (`az acr repository show-tags --name ... --repository lab10-app`)
 - Infrastruktura zniszczona (`terraform destroy`) — brak zasobow w subskrypcji po zakonczeniu laboratorium
