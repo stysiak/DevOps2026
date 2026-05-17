@@ -339,7 +339,7 @@ Brak hasla, brak kodu — VM uwierzytelnia sie automatycznie przez swoja tozsamo
 
 ```bash
 # Sprawdz czy nazwa ACR rozwiazuje sie na prywatny IP (np. 10.0.1.x)
-nslookup devopsnrIndeksaacr.azurecr.io
+nslookup devopsnrIndeksuacr.azurecr.io
 ```
 
 Adres IP w odpowiedzi powinien byc z zakresu `10.0.x.x` (prywatny), a nie publiczny. To potwierdzenie ze private endpoint dziala.
@@ -347,7 +347,7 @@ Adres IP w odpowiedzi powinien byc z zakresu `10.0.x.x` (prywatny), a nie public
 - 11.3 Pobierz Dockerfile z Storage Account:
 
 ```bash
-SA_NAME="devopsnrIndeksasa"
+SA_NAME="devopsnrIndeksusa"
 az storage blob download \
   --account-name $SA_NAME \
   --container-name dockerfiles \
@@ -360,7 +360,7 @@ cat ~/Dockerfile
 - 11.4 Zaloguj sie do ACR uzywajac managed identity:
 
 ```bash
-ACR_NAME="devopsnrIndeksaacr"
+ACR_NAME="devopsnrIndeksuacr"
 az acr login --name $ACR_NAME
 ```
 
@@ -423,11 +423,34 @@ Wynik powinien byc pusty lub zakonczyc sie bledem `ResourceGroupNotFound` — ob
 
 - **`Error: docker: unauthorized: authentication required`** — rola `AcrPush` nie zostala poprawnie przypisana. Sprawdz czy `principal_id` w `vm_acr_push` wskazuje na `azurerm_linux_virtual_machine.vm.identity[0].principal_id`. Propagacja uprawnien Azure moze zajac 1-2 minuty po apply.
 
-- **`dial tcp: lookup devopsnrIndeksaacr.azurecr.io: no such host`** — DNS nie rozwiazuje nazwy ACR. Sprawdz czy `virtual_network_id` w `azurerm_private_dns_zone_virtual_network_link` jest uzupelniony i czy `private_dns_zone_ids` w bloku `private_dns_zone_group` nie jest pusta lista.
+- **`dial tcp: lookup devopsnrIndeksuacr.azurecr.io: no such host`** — DNS nie rozwiazuje nazwy ACR. Sprawdz czy `virtual_network_id` w `azurerm_private_dns_zone_virtual_network_link` jest uzupelniony i czy `private_dns_zone_ids` w bloku `private_dns_zone_group` nie jest pusta lista.
 
 - **Brak SSH do VM** — sprawdz czy NSG ma regule `AllowSSH` (port 22). Sprawdz czy klucz SSH w `terraform.tfvars` to klucz PUBLICZNY (`ssh-ed25519 AAAA...`), nie prywatny.
 
 - **`cloud-init: status: running`** — VM wciaz instaluje pakiety. Uruchom ponownie `cloud-init status --wait` i poczekaj kilka minut.
+
+
+### 13 Wyslanie kodu do repozytorium kursowego
+
+- 13.1 Skopiuj folder terraform do folderu z numerem indeksu:
+
+```bash
+cp -r Lab_10/terraform Lab_10/terraform_nrIndeksu
+```
+
+Cala dalsza edycja (jesli jest potrzebna) odbywa sie wewnatrz `Lab_10/terraform_nrIndeksu`. Nie modyfikuj `Lab_10/terraform/`.
+
+- 13.2 Wypchnij zmiany:
+
+```bash
+git add Lab_10/terraform_nrIndeksu/ .github/workflows/lab10_nrIndeksu.yml
+git commit -m "lab10: terraform IaC nrIndeksu"
+git push
+```
+
+- 13.3 Stworz Pull Request z brancha `lab10/nrIndeksu` do `main` w repozytorium kursowym (DevOps2026).
+
+- 13.4 Zweryfikuj, ze workflow oceniajacy `lab_10_terraform` uruchomil sie i przeszedl (sprawdza: brak TODO, terraform validate).
 
 
 ### Zaliczenie laboratoriow
@@ -435,3 +458,4 @@ Wynik powinien byc pusty lub zakonczyc sie bledem `ResourceGroupNotFound` — ob
 - Workflow `Terraform Lab 10` w forku studenta — oba joby (`terraform-plan`, `terraform-apply`) sa zielone
 - Obraz `lab10-app:v1` widoczny w ACR (`az acr repository show-tags --name ... --repository lab10-app`)
 - Infrastruktura zniszczona (`terraform destroy`) — brak zasobow w subskrypcji po zakonczeniu laboratorium
+- Pull Request do repozytorium kursowego (DevOps2026) z folderem `Lab_10/terraform_nrIndeksu/` i plikiem `lab10_nrIndeksu.yml`

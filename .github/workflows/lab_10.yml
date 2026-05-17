@@ -1,0 +1,161 @@
+name: lab_10_terraform
+
+on:
+  pull_request:
+    branches:
+      - TEST
+      - main
+    paths:
+      - 'Lab_10/app_*/**'
+      - 'Lab_10/terraform_*/**'
+
+jobs:
+  validate:
+    name: Weryfikacja Terraform IaC
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Find student terraform directory
+        id: find-tf
+        run: |
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          git fetch --depth=1 origin "$base_sha"
+          mapfile -t dirs < <(git diff --name-only FETCH_HEAD HEAD \
+            | grep -oE 'Lab_10/(app_[0-9]+|terraform_[0-9]+)' \
+            | sort -u \
+            | grep -vE '_(0000)$')
+          if [ "${#dirs[@]}" -eq 0 ]; then
+            echo "::error::Nie znaleziono folderu app_NNNNN lub terraform_NNNNN w zmianach PR — utwórz folder z numerem indeksu"
+            exit 1
+          fi
+          if [ "${#dirs[@]}" -gt 1 ]; then
+            echo "::error::Znaleziono więcej niż jeden folder studenta w PR: ${dirs[*]} — zostaw tylko jeden"
+            exit 1
+          fi
+          dir="${dirs[0]}"
+          index=$(basename "$dir" | sed 's/[^0-9]*//g')
+          echo "dir=$dir" >> $GITHUB_OUTPUT
+          echo "index=$index" >> $GITHUB_OUTPUT
+          echo "Znaleziono folder studenta: $dir (indeks: $index)"
+
+      - name: Check required terraform files exist
+        run: |
+          dir="${{ steps.find-tf.outputs.dir }}"
+          for f in main.tf variables.tf network.tf storage.tf acr.tf vm.tf outputs.tf; do
+            if [ ! -f "$dir/$f" ]; then
+              echo "::error::Brak pliku $f w $dir"
+              exit 1
+            fi
+            echo "OK: $f istnieje"
+          done
+
+      - name: Check no TODO markers remain
+        run: |
+          dir="${{ steps.find-tf.outputs.dir }}"
+          remaining=$(grep -rn "← TODO\|UZUPELNIJ" "$dir"/ 2>/dev/null || true)
+          if [ -n "$remaining" ]; then
+            echo "::error::Znaleziono niezastąpione placeholdery TODO w plikach Terraform:"
+            echo "$remaining"
+            exit 1
+          fi
+          echo "OK: Brak niezastąpionych placeholderów TODO"
+
+      - name: Check student workflow exists
+        run: |
+          index="${{ steps.find-tf.outputs.index }}"
+          wf=".github/workflows/lab10_${index}.yml"
+          if [ ! -f "$wf" ]; then
+            echo "::error::Brak pliku workflow studenta: $wf"
+            echo "::error::Skopiuj Lab_10/terraform.yml do .github/workflows/lab10_${index}.yml zgodnie z krokiem 3.3 instrukcji"
+            exit 1
+          fi
+          echo "OK: Znaleziono workflow studenta: $wf"
+
+          python3 - <<PYEOF
+          import sys, yaml, re
+
+          with open("$wf") as f:
+              content = f.read()
+              f.seek(0)
+              wf_data = yaml.safe_load(f)
+
+          failed = False
+
+          # Check trigger branches
+          on_section = wf_data.get(True, {}) or {}
+          push_cfg = on_section.get("push", {}) or {}
+          branches = push_cfg.get("branches", []) or []
+          if isinstance(branches, str):
+              branches = [branches]
+
+          if branches == ["main"] or branches == ["TEST"]:
+              print("::error::Workflow triggeruje sie tylko na 'main' lub 'TEST' — zmien sekcje 'branches:' na swoj feature branch lab10/nrIndeksu")
+              failed = True
+          elif not branches:
+              print("::warning::Sekcja 'branches:' w workflow jest pusta lub brakuje jej")
+          else:
+              print(f"OK: Trigger branches: {branches}")
+
+          # Check terraform plan job
+          if not re.search(r'terraform.{0,20}plan', content, re.IGNORECASE):
+              print("::error::Brak job terraform-plan w workflow — sprawdz krok 3.3 instrukcji")
+              failed = True
+          else:
+              print("OK: Znaleziono job terraform-plan")
+
+          # Check terraform apply job
+          if not re.search(r'terraform.{0,20}apply', content, re.IGNORECASE):
+              print("::error::Brak job terraform-apply w workflow — sprawdz krok 3.3 instrukcji")
+              failed = True
+          else:
+              print("OK: Znaleziono job terraform-apply")
+
+          # Check production environment (manual approval gate)
+          if not re.search(r'environment.*production', content, re.IGNORECASE):
+              print("::warning::Brak sekcji 'environment: production' w workflow — job terraform-apply powinien wymagac recznego zatwierdzenia (krok 3.1-3.2 instrukcji)")
+          else:
+              print("OK: Znaleziono environment: production (reczne zatwierdzenie)")
+
+          # Check ARM secrets are referenced
+          for secret in ['ARM_CLIENT_ID', 'ARM_CLIENT_SECRET', 'ARM_SUBSCRIPTION_ID', 'ARM_TENANT_ID']:
+              if secret not in content:
+                  print(f"::error::Brak referencji do sekretu {secret} w workflow — sprawdz krok 2.3 instrukcji")
+                  failed = True
+              else:
+                  print(f"OK: Znaleziono {secret}")
+
+          sys.exit(1 if failed else 0)
+          PYEOF
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+
+      - name: Terraform Init
+        working-directory: ${{ steps.find-tf.outputs.dir }}
+        run: terraform init -backend=false
+
+      - name: Terraform Validate
+        working-directory: ${{ steps.find-tf.outputs.dir }}
+        run: terraform validate
+
+      - name: Check lock file committed
+        run: |
+          dir="${{ steps.find-tf.outputs.dir }}"
+          if [ ! -f "$dir/.terraform.lock.hcl" ]; then
+            echo "::warning::Brak pliku .terraform.lock.hcl w $dir — dodaj go komenda 'git add $dir/.terraform.lock.hcl' zgodnie z krokiem 8.3 instrukcji"
+          else
+            echo "OK: Znaleziono .terraform.lock.hcl"
+          fi
+
+      - name: Summary
+        run: |
+          echo "========================================"
+          echo "Weryfikacja Terraform zakonczona pomyslnie!"
+          echo "Folder studenta: ${{ steps.find-tf.outputs.dir }}"
+          echo "Konfiguracja Terraform jest poprawna skladniowo."
+          echo "========================================"

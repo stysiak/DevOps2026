@@ -6,7 +6,7 @@ resource "azurerm_storage_account" "sa" {
   account_replication_type = "LRS"
 
   network_rules {
-    default_action = "Allow"
+    default_action = "Deny"
 
     # ← TODO: uzupelnij virtual_network_subnet_ids aby Storage Account
     # rejestrowal subnet jako zaufana siec (service endpoint).
