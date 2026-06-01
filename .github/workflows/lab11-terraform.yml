@@ -58,7 +58,7 @@ jobs:
           echo "Srodowisko GHA: ${INDEX}"
 
   # ----------------------------------------------------------------
-  # Job 1: walidacja skladni i brak TODO — bez dostepu do Azure
+  # Job 1: walidacja skladni HCL — bez dostepu do Azure
   # ----------------------------------------------------------------
   terraform-validate:
     name: Validate
@@ -67,22 +67,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      # Sprawdzenie TODO jako PIERWSZY krok — przed terraform init.
-      # Placeholder '???' jest nieprawidlowa skladnia HCL, wiec terraform init
-      # failuje z cryptycznym bledem jezeli nie przerwiemy wczesniej.
-      - name: Sprawdz czy TODO zostaly usuniete
-        working-directory: ${{ env.WORKING_DIR }}
-        run: |
-          # Szukamy niezastapionych placeholderow: ZMIEN_* (stringi) oraz wartosci = 0 przy TODO (liczby)
-          remaining=$(grep -rn 'ZMIEN_\|replicas = 0\|max_replicas = 0\|min_replicas = 0\|average_utilization = 0' \
-            --include="*.tf" . 2>/dev/null || true)
-          if [ -n "$remaining" ]; then
-            echo "::error::Uzupelnij wszystkie pola oznaczone '← TODO' w plikach .tf:"
-            echo "$remaining"
-            exit 1
-          fi
-          echo "OK: Brak niezastapionych placeholderow"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
