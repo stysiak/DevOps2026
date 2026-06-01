@@ -121,15 +121,25 @@ cp terraform.tfvars.example terraform.tfvars
 
 Uzupelnij `terraform.tfvars`:
 ```hcl
-github_org    = "TwojaNazwaUzytkownikaGitHub"
-github_repo   = "DevOps2026"
-github_branch = "lab11/nrIndeksu"
+prefix             = "devops123456"        # Twoj prefiks (ten sam co w Lab_11/terraform)
+github_org         = "TwojaNazwaUzytkownikaGitHub"
+github_repo        = "DevOps2026"
+github_environment = "123456"             # WAZNE: dokladnie Twoj numer indeksu
+                                          # Musi pasowac do nazwy srodowiska w GitHub
+                                          # i do czesci brancha po "/" (lab11/123456)
 ```
 
 ```bash
 terraform init
 terraform apply
 ```
+
+> **Dlaczego `github_environment` musi byc numerem indeksu?**
+> GitHub Actions wysyla do Azure token z polem `subject`:
+> `repo:<org>/<repo>:environment:<nazwa-srodowiska>`
+> Azure sprawdza czy istnieje federated credential z identycznym subjectem.
+> Jesli `github_environment` w bootstrap Terraform rozni sie od nazwy srodowiska
+> w GitHub (krok 2.2), Azure zwroci blad `No matching federated identity record found`.
 
 - 2.2 Stworz srodowisko o nazwie rownej Twojemu numerowi indeksu w Twoim forku:
 
@@ -411,6 +421,23 @@ kubectl describe svc podinfo  # sprawdz Events na dole output
 ```
 Najczestszy powod: subskrypcja Azure ma limit publicznych IP (sprawdz w Azure Portal → Quotas).
 
+**4. GitHub Actions: `No matching federated identity record found`**
+
+Azure nie znalazl federated credential pasujacego do subjectu z tokenu GHA.
+Przyczyna: `github_environment` w `terraform-gha-identity/terraform.tfvars` rozni sie
+od nazwy srodowiska utworzonego w GitHub (krok 2.2).
+
+Sprawdz subject w logu workflow (linia `subject claim`) i porownaj z federowanymi
+credentialami w Azure Portal → Managed Identities → `<prefix>-gha-identity` → Federated credentials.
+
+Fix:
+```bash
+cd Lab_11/terraform-gha-identity
+# Upewnij sie ze terraform.tfvars ma:
+#   github_environment = "<TWOJ_NR_INDEKSU>"  # dokladnie taki sam jak nazwa srodowiska w GitHub
+terraform apply
+```
+
 **5. Po `terraform destroy` nadal widac zasoby w Azure Portal**
 
 Azure usuwa zasoby asynchronicznie. Poczekaj 5-10 minut i odswiez portal.
@@ -418,35 +445,5 @@ Mozesz sprawdzic status: `az group show --name <PREFIX>-rg --query properties.pr
 Jezeli pokazuje `Deleting` — trwa usuwanie. Jezeli `Deleted` lub blad `ResourceGroupNotFound` — zakonczone.
 
 
-## Zaliczenie laboratoriow
 
-Wypchnij zmiany na swoj fork i otworz Pull Request na branch `lab11/<nrIndeksu>`.
 
-```bash
-git add Lab_11/terraform/*.tf Lab_11/terraform/terraform.tfvars
-git commit -m "lab11: K8s na AKS — Deployment, ConfigMap, Ingress, HPA"
-git push origin lab11/nrIndeksu
-```
-
-Do PR dolacz:
-1. Screenshot z `kubectl get pods` pokazujacy Running pody
-2. Screenshot z `kubectl get hpa` pokazujacy TARGETS z wartoscia procentowa (nie `<unknown>`)
-3. Screenshot z `kubectl get pods -w` podczas self-healing (moment usuwania i odtwarzania poda)
-4. Screenshot lub log z `kubectl get hpa -w` podczas stress testu pokazujacy wzrost REPLICAS
-5. Wynik `terraform output get_credentials_command` (jako tekst w opisie PR)
-
-**Kryteria oceny:**
-
-| Kryterium | Punkty |
-|-----------|--------|
-| `terraform apply` konczy sie bez bledow | 20 |
-| Aplikacja dostepna przez Ingress (`curl` zwraca JSON) | 20 |
-| Self-healing udokumentowany (screenshot kubectl get pods -w) | 20 |
-| HPA skaluje do 2+ replik podczas stress testu | 20 |
-| `terraform destroy` wykonany (brak resource group w Azure) | 10 |
-| **Bonus:** W logach widac rozne hostname podow podczas stress testu | 10 |
-
-**Tematy do rozwinięcia (dla chętnych):**
-- Dodaj PersistentVolume do podinfo (przechowywanie sesji miedzy restartami)
-- Skonfiguruj Namespace i przenieś aplikacje do dedykowanego namespace
-- Dodaj NetworkPolicy ograniczajaca ruch miedzy podami

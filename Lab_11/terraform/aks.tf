@@ -19,6 +19,10 @@ resource "azurerm_kubernetes_cluster" "aks" {
     type = "SystemAssigned"
   }
 
+  # OIDC Issuer — wymagany przez Workload Identity Federation (GHA OIDC).
+  # Raz wlaczony nie moze byc wylaczony (Azure blokuje zmiane).
+  oidc_issuer_enabled = true
+
   # Metrics Server jest potrzebny dla HPA (Horizontal Pod Autoscaler).
   # W AKS jest wlaczony domyslnie od wersji 1.27+.
 }
