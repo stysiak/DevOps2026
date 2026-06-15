@@ -31,4 +31,4 @@ jobs:
         run: |
           IMAGE=${{ secrets.ACR_LOGIN_SERVER }}/app:${{ github.sha }}
           docker build -t $IMAGE .
-          docker push $IMAGE 
+          docker push $IMAGE
