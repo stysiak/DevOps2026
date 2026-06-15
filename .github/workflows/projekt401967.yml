@@ -17,8 +17,8 @@ jobs:
 
       - name: Uruchom testy
         run: |
-          pip install -r requirements.txt
-          pytest
+          pip install -r app/requirements.txt
+          cd app && pytest
 
       - name: Zaloguj się do ACR
         uses: azure/docker-login@v1
