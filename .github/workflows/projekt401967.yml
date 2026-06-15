@@ -7,6 +7,9 @@ on:
 jobs:
   build-test-push:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projekt401967
     steps:
       - uses: actions/checkout@v4
 
@@ -18,7 +21,7 @@ jobs:
       - name: Uruchom testy
         run: |
           pip install -r app/requirements.txt
-          cd app && pytest
+          pytest
 
       - name: Zaloguj się do ACR
         uses: azure/docker-login@v1
