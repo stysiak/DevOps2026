@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: projekt401967
+        working-directory: Projekt/projekt401967
     steps:
       - uses: actions/checkout@v4
 
